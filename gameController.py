@@ -1,10 +1,14 @@
 import random as rand
 import numpy as np
 import time
+from scipy import signal
 
 _VARS = {'size': 75, 'genNumber': 0, 'runTime': 0., 'numLiving': 0, 'algSwitchThreshold': 0.3}
 
-_MAPS = {'world': 0, 'neighborMap': 0,'L': np.empty(shape=(0,2), dtype=np.int8), 'D': np.empty(shape=(0,2), dtype=np.int8)}
+_MAPS = {'world': 0, 'neighborMap': 0, 
+    'L': np.empty(shape=(0,2), dtype=np.int8), 
+    'D': np.empty(shape=(0,2), dtype=np.int8),
+    'kernel': np.array([[1,1,1],[1,0,1],[1,1,1]])}
 
 _MAPS['world'] = np.zeros(shape=(_VARS['size'], _VARS['size']), dtype=np.int8)
 
@@ -51,21 +55,7 @@ def findDead():
     return np.asarray(np.where(_MAPS['world'] == 0)).T
 
 def checkAll():
-    # populate the neighbor map by counting every cell's neighbors
-    for x in range(0, _VARS['size']):
-        for y in range(0, _VARS['size']):
-            numLivingNeighbors = 0
-            for dx in range(-1, 2):
-                for dy in range (-1, 2):
-                    if x + dx < 0 or x + dx > _VARS['size']-1:
-                        continue
-                    if y + dy < 0 or y + dy > _VARS['size']-1:
-                        continue
-                    if dx == 0 and dy == 0:
-                        continue
-                    if _MAPS['world'][x + dx][y + dy] == 1:
-                        numLivingNeighbors += 1
-            _MAPS['neighborMap'][x][y] = numLivingNeighbors
+    _MAPS['neighborMap'] = signal.convolve2d(_MAPS['world'], _MAPS['kernel'], mode='same', boundary='fill')
 
 def checkLiving(L):
     livingMarked = np.zeros(shape=(0, 2), dtype=np.int8)    # empty set
@@ -94,39 +84,17 @@ def checkDead(D):
 def kill(marked):
     for cell in marked:
         _MAPS['world'][cell[0]][cell[1]] = 0    # kill cell
-
-        # tell every neighbor of this cell that it has one fewer living neighbor
-        for dx in range(-1, 2):
-            for dy in range (-1, 2):
-                if cell[0] + dy < 0 or cell[0] + dy > _VARS['size']-1:
-                    continue
-                if cell[1] + dx < 0 or cell[1] + dx > _VARS['size']-1:
-                    continue
-                if dx == 0 and dy == 0:
-                    continue
-                if _MAPS['neighborMap'][cell[0] + dy][cell[1] + dx] > 0:
-                    _MAPS['neighborMap'][cell[0] + dy][cell[1] + dx] -= 1
-
         _VARS['numLiving'] -= 1
 
 def giveLife(marked):
     for cell in marked:
         _MAPS['world'][cell[0]][cell[1]] = 1    # bring cell to life
-        # tell every neighbor of this cell that it has one more living neighbor
-        for dx in range(-1, 2):
-            for dy in range (-1, 2):
-                if cell[0] + dy < 0 or cell[0] + dy > _VARS['size']-1:
-                    continue
-                if cell[1] + dx < 0 or cell[1] + dx > _VARS['size']-1:
-                    continue
-                if dx == 0 and dy == 0:
-                    continue
-                if _MAPS['neighborMap'][cell[0] + dy][cell[1] + dx] < 8:
-                    _MAPS['neighborMap'][cell[0] + dy][cell[1] + dx] += 1
         _VARS['numLiving'] += 1
 
 def iterate():
     startTime = time.perf_counter()             # keep track of runtime
+
+    checkAll()
 
     _MAPS['L'] = findLiving()                   # find every living cell
     livingMarked = checkLiving(_MAPS['L'])      # decide which living cells should die
